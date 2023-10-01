@@ -2861,6 +2861,10 @@ void WorldObject::MovePositionToFirstCollision(Position& pos, float dist, float 
 void WorldObject::SetPhaseMask(uint32 newPhaseMask, bool update)
 {
     sScriptMgr->OnBeforeWorldObjectSetPhaseMask(this, m_phaseMask, newPhaseMask, m_useCombinedPhases, update);
+
+    if (m_currMap)
+        m_currMap->UpdateObjectPhase(this, newPhaseMask, m_phaseMask);
+
     m_phaseMask = newPhaseMask;
 
     if (update && IsInWorld())

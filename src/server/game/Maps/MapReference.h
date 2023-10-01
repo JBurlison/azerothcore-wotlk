@@ -27,18 +27,18 @@ protected:
     void targetObjectBuildLink() override
     {
         // called from link()
-        getTarget()->m_mapRefMgr.insertFirst(this);
-        getTarget()->m_mapRefMgr.incSize();
+        getTarget()->GetPhase(this->GetSource()->GetPhaseMask())->m_mapRefMgr.insertFirst(this);
+        getTarget()->GetPhase(this->GetSource()->GetPhaseMask())->m_mapRefMgr.incSize();
     }
     void targetObjectDestroyLink() override
     {
         // called from unlink()
-        if (isValid()) getTarget()->m_mapRefMgr.decSize();
+        if (isValid()) getTarget()->GetPhase(this->GetSource()->GetPhaseMask())->m_mapRefMgr.decSize();
     }
     void sourceObjectDestroyLink() override
     {
         // called from invalidate()
-        getTarget()->m_mapRefMgr.decSize();
+        getTarget()->GetPhase(this->GetSource()->GetPhaseMask())->m_mapRefMgr.decSize();
     }
 public:
     MapReference() : Reference<Map, Player>() {}

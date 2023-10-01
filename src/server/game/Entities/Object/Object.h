@@ -376,6 +376,7 @@ class MovableMapObject
 {
     friend class Map; //map for moving creatures
     friend class ObjectGridLoader; //grid loader for loading creatures
+    friend class MapPhase;
     template<class T> friend class RandomMovementGenerator;
 
 protected:

@@ -38,6 +38,7 @@
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
+#include <MapPhase.h>
 
 class Unit;
 class WorldPacket;
@@ -310,6 +311,7 @@ enum EncounterCreditType
 class Map : public GridRefMgr<NGridType>
 {
     friend class MapReference;
+    friend class MapPhase;
 public:
     Map(uint32 id, std::chrono::seconds, uint32 InstanceId, uint8 SpawnMode, Map* _parent = nullptr);
     ~Map() override;
@@ -332,6 +334,14 @@ public:
     virtual bool AddPlayerToMap(Player*);
     virtual void RemovePlayerFromMap(Player*, bool);
     virtual void AfterPlayerUnlinkFromMap();
+
+    /// <summary>
+    ///     Updates the phase mask of the object. Ensures the phase is tracked by the map.
+    /// </summary>
+    /// <param name="obj"></param>
+    /// <param name="oldPhaseMask"></param>
+    /// <param name="newPhaseMask"></param>
+    void UpdateObjectPhase(WorldObject* obj, uint32 newPhaseMask, uint32 oldPhaseMask);
     template<class T> bool AddToMap(T*, bool checkTransport = false);
     template<class T> void RemoveFromMap(T*, bool);
 
@@ -570,7 +580,8 @@ public:
     bool GetObjectHitPos(uint32 phasemask, float x1, float y1, float z1, float x2, float y2, float z2, float& rx, float& ry, float& rz, float modifyDist);
     [[nodiscard]] float GetGameObjectFloor(uint32 phasemask, float x, float y, float z, float maxSearchDist = DEFAULT_HEIGHT_SEARCH) const
     {
-        return _dynamicTree.getHeight(x, y, z, maxSearchDist, phasemask);
+        auto phase = _phases.find(phasemask)->second;
+        return phase->_dynamicTree.getHeight(x, y, z, maxSearchDist, phasemask);
     }
     /*
         RESPAWN TIMES
@@ -680,15 +691,6 @@ private:
     void AddDynamicObjectToMoveList(DynamicObject* go, float x, float y, float z, float ang);
     void RemoveDynamicObjectFromMoveList(DynamicObject* go);
 
-    bool _creatureToMoveLock;
-    std::vector<Creature*> _creaturesToMove;
-
-    bool _gameObjectsToMoveLock;
-    std::vector<GameObject*> _gameObjectsToMove;
-
-    bool _dynamicObjectsToMoveLock;
-    std::vector<DynamicObject*> _dynamicObjectsToMove;
-
     [[nodiscard]] bool IsGridLoaded(const GridCoord&) const;
     void EnsureGridCreated_i(const GridCoord&);
     void EnsureGridLoadedForActiveObject(Cell const&, WorldObject* object);
@@ -712,6 +714,12 @@ private:
 
     void SendObjectUpdates();
 
+    /// <summary>
+    ///     Adds phase to the cache if it does not exist.
+    /// </summary>
+    /// <param name="phaseMask"></param>
+    /// <returns>Returns the new phase if it did not exist or existing phase for the mask</returns>
+    MapPhase* GetPhase(uint32 phaseMask);
 protected:
     void SetUnloadReferenceLock(GridCoord const& p, bool on) { getNGrid(p.x_coord, p.y_coord)->setUnloadReferenceLock(on); }
 
@@ -724,21 +732,10 @@ protected:
     uint32 i_InstanceId;
     uint32 m_unloadTimer;
     float m_VisibleDistance;
-    DynamicMapTree _dynamicTree;
     time_t _instanceResetPeriod; // pussywizard
 
-    MapRefMgr m_mapRefMgr;
-    MapRefMgr::iterator m_mapRefIter;
-
+    std::unordered_map<uint32, MapPhase*> _phases;
     int32 m_VisibilityNotifyPeriod;
-
-    typedef std::set<WorldObject*> ActiveNonPlayers;
-    ActiveNonPlayers m_activeNonPlayers;
-    ActiveNonPlayers::iterator m_activeNonPlayersIter;
-
-    // Objects that must update even in inactive grids without activating them
-    TransportsContainer _transports;
-    TransportsContainer::iterator _transportsUpdateIter;
 
 private:
     Player* _GetScriptPlayerSourceOrTarget(Object* source, Object* target, const ScriptInfo* scriptInfo) const;
@@ -781,23 +778,27 @@ private:
 
     void AddToActiveHelper(WorldObject* obj)
     {
-        m_activeNonPlayers.insert(obj);
+        auto phase = GetPhase(obj->GetPhaseMask());
+
+        phase->m_activeNonPlayers.insert(obj);
     }
 
     void RemoveFromActiveHelper(WorldObject* obj)
     {
+        auto phase = GetPhase(obj->GetPhaseMask());
+
         // Map::Update for active object in proccess
-        if (m_activeNonPlayersIter != m_activeNonPlayers.end())
+        if (phase->m_activeNonPlayersIter != phase->m_activeNonPlayers.end())
         {
-            ActiveNonPlayers::iterator itr = m_activeNonPlayers.find(obj);
-            if (itr == m_activeNonPlayers.end())
+            auto itr = phase->m_activeNonPlayers.find(obj);
+            if (itr == phase->m_activeNonPlayers.end())
                 return;
-            if (itr == m_activeNonPlayersIter)
-                ++m_activeNonPlayersIter;
-            m_activeNonPlayers.erase(itr);
+            if (itr == phase->m_activeNonPlayersIter)
+                ++phase->m_activeNonPlayersIter;
+            phase->m_activeNonPlayers.erase(itr);
         }
         else
-            m_activeNonPlayers.erase(obj);
+            phase->m_activeNonPlayers.erase(obj);
     }
 
     std::unordered_map<ObjectGuid::LowType /*dbGUID*/, time_t> _creatureRespawnTimes;

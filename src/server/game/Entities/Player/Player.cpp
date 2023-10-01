@@ -2211,7 +2211,9 @@ void Player::SetGameMaster(bool on)
         getHostileRefMgr().setOnlineOfflineState(false);
         CombatStopWithPets();
 
+        auto map = GetMap();
         SetPhaseMask(uint32(PHASEMASK_ANYWHERE), false);    // see and visible in all phases
+        GetMapRef().link(map, this); // Links to new phase
         m_serverSideVisibilityDetect.SetValue(SERVERSIDE_VISIBILITY_GM, GetSession()->GetSecurity());
     }
     else
@@ -2222,8 +2224,9 @@ void Player::SetGameMaster(bool on)
         if (!newPhase)
             newPhase = PHASEMASK_NORMAL;
 
+        auto map = GetMap();
         SetPhaseMask(newPhase, false);
-
+        GetMapRef().link(map, this); // Links to new phase
         m_ExtraFlags &= ~ PLAYER_EXTRA_GM_ON;
         SetFactionForRace(getRace(true));
         RemovePlayerFlag(PLAYER_FLAGS_GM);
